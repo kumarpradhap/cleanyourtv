@@ -12,6 +12,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Patch - greeting names take turns, one per hour
+        run: |
+          python3 - <<'EOF'
+          p = 'launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java'
+          s = open(p).read()
+          old = '''            greeting.setText(greetingName.isEmpty() ? getString(res)
+                              : getString(R.string.greeting_with_name, getString(res), greetingName));'''
+          new = '''            // Several names separated by "|" take turns, one per hour.
+                      String name = greetingName;
+                      if (name.contains("|")) {
+                          String[] names = name.split("\\\\|");
+                          Calendar now = Calendar.getInstance();
+                          int slot = now.get(Calendar.DAY_OF_YEAR) * 24 + now.get(Calendar.HOUR_OF_DAY);
+                          name = names[slot % names.length].trim();
+                      }
+                      greeting.setText(name.isEmpty() ? getString(res)
+                              : getString(R.string.greeting_with_name, getString(res), name));'''
+          assert s.count(old) == 1, 'greeting line not found - launcher code changed'
+          open(p, 'w').write(s.replace(old, new))
+          print('patched')
+          EOF
+          grep -n -A9 'take turns, one per hour' launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
